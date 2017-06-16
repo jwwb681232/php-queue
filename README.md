@@ -100,7 +100,7 @@ $ gem install resque
 $ resque-web -p 3000
 ```
 
-## 5、Redis和[php-resque](https://github.com/chrisboulton/php-resque)使用
+## 5、Redis+[php-resque](https://github.com/chrisboulton/php-resque)执行步骤分析
 > php-resque是来自Ruby的项目Resque的一个PHP扩展，正是由于Resque清晰简单的解决了后台任务带来的一系列问题。
 
 #### 在Resque中后台任务的角色划分 
@@ -116,3 +116,75 @@ $ resque-web -p 3000
 >5. 当队列中有Job时，Worker取出Job并运行，即实例化Job Class并执行Class中的方法。
 
 至此就可以完整的运行完一个后台任务。
+
+## 6、开始编码
+在需要使用队列的项目中新建一个文件夹来专门存放队列相关逻辑,app目录就是我的队列逻辑目录
+```shell
+$ mkdir /home/wwwroot/项目目录/app
+```
+### 编写Job
+/home/wwwroot/项目目录/app/Mail.php
+
+这个job模拟的是发送邮件，每个入列操作等待10s执行输出
+```php
+<?php
+
+class Mail
+{
+    public function perform()
+    {
+        sleep(10);
+        echo '执行成功！'.PHP_EOL;
+    }
+}
+```
+
+### 入队列（Queue）
+/home/wwwroot/项目目录/app/CreateJob.php
+1. 首先引入自动加载
+2. 设置Redis服务器配置
+3. 模拟参数
+4. 入队列
+```php
+<?php
+include '../vendor/autoload.php';
+Resque::setBackend('127.0.0.1:6379');
+$args = array('name'=>'王萧');
+Resque::enqueue('default',$argv[1],$args,true);
+```
+
+### 执行者
+/home/wwwroot/项目目录/app/resque.php
+```php
+<?php
+date_default_timezone_set('GMT');
+require './Mail.php';
+require '../vendor/chrisboulton/php-resque/resque.php';
+```
+## 7、开始测试
+一般步骤都是先写入一个入队请求，然后在开始执行`执行者`，这种步骤对于初次接触的人很不好理解，虽说先在没有`执行者`的情况下写入一个入队请求可以在`执行者`启动后自动检测入队情况然后执行，但我们这只是测试，学习，弄明白原理是非常重要的。
+我的步骤是1、启动`执行者`，等待入队请求；2、写入一个入队请求；3、当`执行者`检测到有入队请求后立即执行该请求，完成出队。所以我们需要打开两个ssh终端，A终端启动`执行者`，B终端写入队请求
+```shell
+# A终端
+$ cd /home/wwwroot/项目目录/app
+$ QUEUE=default php resque.php
+*** Starting worker localhost.localdomain:5527:default
+```
+```shell
+# B终端 让6个请求入队
+$ cd /home/wwwroot/项目目录/app
+$ php CreateJob.php Mail
+$ php CreateJob.php Mail
+$ php CreateJob.php Mail
+$ php CreateJob.php Mail
+$ php CreateJob.php Mail
+$ php CreateJob.php Mail
+```
+让我们等待1分钟后查看A终端
+
+<img src="http://7xuntv.com1.z0.glb.clouddn.com/q1.png" alt="" class="alignnone size-full wp-image-264" />
+
+6个全部执行完毕，到目前为止整个测试结束。
+
+## 8、php-resque细节
+
