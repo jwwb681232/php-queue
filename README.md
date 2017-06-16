@@ -71,3 +71,48 @@ protected-mode no
 
 ## 4、安装ruby
 安装ruby是为了在主机上搭建一个队列（queue）监控系统（resque-web），可以直观的对队列进行操作。
+```shell
+$ mkdir /usr/local/ruby
+$ cd /usr/local/ruby
+$ wget https://cache.ruby-lang.org/pub/ruby/2.4/ruby-2.4.1.tar.gz
+$ tar xzf ruby-2.4.1.tar.gz
+$ cd ruby-2.4.1
+$ ./configure
+$ make && make install
+```
+ruby也有一个类似于PHP的composer包管理工具gem，我们安装ruby后就会默认安装gem
+
+#### 检测是否有gem
+```shell
+$ gem -v
+```
+如果没有找到该命令则需要创建一个软连接
+```shell
+$ ln -s /usr/local/bin/gem /usr/bin/gem
+```
+
+#### 安装resque-web
+```shell
+$ gem install resque
+```
+执行以下命令则即可运行在 3000 端口。
+```shell
+$ resque-web -p 3000
+```
+
+## 5、Redis和[php-resque](https://github.com/chrisboulton/php-resque)使用
+> php-resque是来自Ruby的项目Resque的一个PHP扩展，正是由于Resque清晰简单的解决了后台任务带来的一系列问题。
+
+#### 在Resque中后台任务的角色划分 
+>* Job       （任务）     一个Job就是一个需要在后台完成的任务，比如发送邮件，就可以抽象为一个Job。在Resque中一个Job就是一个Class。
+>* Queue     （队列）     也就是上文的消息队列，在Resque中，队列则是由Redis实现的。Resque还提供了一个简单的队列管理器，可以实现将Job插入/取出队列等功能。
+>* Worker    （执行者）   负责从队列中取出Job并执行，可以以守护进程的方式运行在后台。
+
+那么基于这个划分，一个后台任务在Resque下的基本流程是这样的
+>1. 将一个后台任务编写为一个独立的Class，这个Class就是一个Job。
+>2. 在需要使用后台程序的地方，系统将Job Class的名称以及所需参数放入队列。
+>3. 以命令行方式开启一个Worker，并通过参数指定Worker所需要处理的队列。
+>4. Worker作为守护进程运行，并且定时检查队列。
+>5. 当队列中有Job时，Worker取出Job并运行，即实例化Job Class并执行Class中的方法。
+
+至此就可以完整的运行完一个后台任务。
